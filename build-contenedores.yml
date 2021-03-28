@@ -1,0 +1,99 @@
+---
+- name: Crea un cluster k0s con contenedores de k0s
+  hosts: localhost
+  gather_facts: no
+  connection: community.docker.docker_api
+  vars_prompt:
+    - name: version
+      default: latest
+      prompt: version?
+      private: no
+    - name: work_nodes
+      default: 2
+      prompt: nodos de trabajo?
+      private: no
+  tasks:
+    - name: Forzamos a entero
+      ansible.builtin.set_fact:
+        num_work_nodes: '{{ work_nodes | int() }}'
+        version: '{{ version }}'
+
+    - name: Suficientes nodos de trabajo?
+      ansible.builtin.fail:
+        msg: Al menos un worker
+      when: num_work_nodes < "1"
+
+    - name: Obtenemos Imagen k0s
+      community.docker.docker_image:
+        name: 'k0sproject/k0s:{{ version }}'
+        source: pull
+      
+    - name: Crea nodo inicial de control
+      community.docker.docker_container:
+        container_default_behavior: compatibility
+        detach: yes
+        name: k0s
+        hostname: 'k0s'
+        privileged: yes
+        volumes:
+          - /var/lib/k0s
+        ports:
+          - "6443:6443"
+        image: 'k0sproject/k0s:{{ version }}'
+        state: started
+
+    - name: Añadimos al inventario
+      ansible.builtin.add_host:
+        name: 'k0s'
+
+- name: Obtenemos tokens
+  hosts: k0s
+  gather_facts: no
+  connection: community.docker.docker_api
+  tasks:
+    - name: Esperamos a que exista config.
+      ansible.builtin.wait_for:
+        timeout: 60
+        # path: /var/lib/k0s/pki/admin.conf
+      delegate_to: localhost
+
+    - name: Obten token para worker
+      raw: '/usr/local/bin/k0s token create --role=worker'
+      register: cmd_output_w
+
+    - name: Guardamos token worker
+      ansible.builtin.set_fact:
+        token_workers: '{{ cmd_output_w.stdout_lines[0] }}'
+
+    - name: Obten token para control
+      raw: '/usr/local/bin/k0s token create --role=control'
+      register: cmd_output_c
+
+    - name: Guardamos token control
+      ansible.builtin.set_fact:
+        token_control: '{{ cmd_output_c.stdout_lines[0]}}'
+
+    - name: Token worker
+      debug:
+        var: token_workers
+
+- name: Construimos resto de nodos
+  hosts: localhost
+  gather_facts: no
+  connection: community.docker.docker_api
+  vars:
+    token_workers: '{{ hostvars["k0s"].token_workers }}'
+  tasks:
+    - name: workers
+      community.docker.docker_container:
+        container_default_behavior: compatibility
+        detach: yes
+        name: 'k0s-wkr-{{ item }}'
+        hostname: 'k0s-wkr-{{ item }}'
+        privileged: yes
+        volumes:
+          - /var/lib/k0s
+        image: 'docker.io/k0sproject/k0s:{{ version }}'
+        command: '/usr/local/bin/k0s worker {{ token_workers }}'
+        state: started
+      loop: '{{ range(1, num_work_nodes|int + 1) | list }}'

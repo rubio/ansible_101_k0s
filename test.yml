@@ -1,0 +1,16 @@
+---
+- name: test
+  hosts: localhost
+  vars:
+    lista:
+      - a
+      - b
+      - c
+      - d
+  tasks:
+    - name: set string
+      set_fact:
+        cadena: '{{ lista | map("regex_replace", "^", "--prefix=") | join(" ")}}'
+    - name: show cadena
+      debug:
+        var: cadena

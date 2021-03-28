@@ -1,0 +1,53 @@
+---
+- name: Crea contenedores (ubuntu) de k0s
+  hosts: localhost
+  gather_facts: no
+  connection: community.docker.docker_api
+  vars_prompt:
+    - name: work_nodes
+      default: 2
+      prompt: nodos de trabajo?
+      private: no
+  tasks:
+    - name: Forzamos a entero
+      ansible.builtin.set_fact:
+        num_work_nodes: '{{ work_nodes | int() }}'
+
+    - name: Suficientes nodos de trabajo?
+      ansible.builtin.fail:
+        msg: Al menos un worker
+      when: num_work_nodes < "1"
+
+    - name: Obtenemos Imagen k0s
+      community.docker.docker_image:
+        name: 'ubuntu:20.04'
+        source: pull
+      
+    - name: Crea nodo inicial de control
+      community.docker.docker_container:
+        container_default_behavior: compatibility
+        detach: yes
+        name: ubuntu-1
+        hostname: 'ubuntu-1'
+        privileged: yes
+        volumes:
+          - /var/lib/k0s
+        ports:
+          - "6443:6443"
+        image: 'ubuntu:20.04'
+        command: 'sleep infinity'
+        state: started
+
+    - name: Creamos workers
+      community.docker.docker_container:
+        container_default_behavior: compatibility
+        detach: yes
+        name: 'ubuntu-{{ item }}'
+        hostname: 'ubuntu-{{ item }}'
+        privileged: yes
+        volumes:
+          - /var/lib/k0s
+        image: 'ubuntu:20.04'
+        command: 'sleep infinity'
+        state: started
+      loop: '{{ range(2, num_work_nodes|int + 2) | list }}'

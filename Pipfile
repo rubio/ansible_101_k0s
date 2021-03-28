@@ -1,0 +1,18 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+
+[packages]
+ansible-base = "2.10"
+ansible-lint = "4.3"
+jmespath = "0.10.0"
+requests = "*"
+argcomplete = "*"
+docker = "*"
+"github3.py" = "*"
+
+[requires]
+python_version = "3.8"
