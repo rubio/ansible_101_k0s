@@ -64,9 +64,6 @@
     k0s_path: '{{ hostvars["localhost"].k0s_path }}'
     kubectl_path: '{{ hostvars["localhost"].kubectl_path }}'
   tasks:
-    - name: Necesitamos python
-      ansible.builtin.raw: test -e /usr/bin/python3 || (apt-get -y update && apt-get install -y python3-minimal)
-
     - name: Subimos k0s
       ansible.builtin.copy:
         src: '{{ k0s_path }}'
