@@ -51,3 +51,27 @@
         command: 'sleep infinity'
         state: started
       loop: '{{ range(2, num_work_nodes|int + 2) | list }}'
+
+    - name: Añadimos hosts al inventario en memoria
+      ansible.builtin.add_host:
+        hostname: 'ubuntu-{{ item }}'
+      loop: '{{ range(1, num_work_nodes|int + 2) | list }}'
+
+- name: Conf. red
+  hosts: all
+  gather_facts: no
+  connection: community.docker.docker_api
+  tasks:
+    - name: Necesitamos python
+      ansible.builtin.raw: test -e /usr/bin/python3 || (apt-get -y update && apt-get install -y python3-minimal)
+
+    - name: Creamos machine-id
+      ansible.builtin.copy:
+        content: "{{ lookup('password', '/dev/null length=16' ) | hash('md5') }}"
+        dest: /etc/machine-id
+
+    - name: necesitamos iproute2, iptables
+      ansible.builtin.apt:
+        update_cache: yes
+        name: [ 'iproute2', 'iptables']
+        state: present
