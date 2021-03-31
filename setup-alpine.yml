@@ -1,0 +1,135 @@
+---
+- name: Obtenemos release k0s
+  hosts: localhost
+  gather_facts: no
+  become: no
+  vars_prompt:
+    - name: version
+      default: latest
+      prompt: version?
+      private: no
+  tasks:
+    - name: Obten tag ultima release
+      block:
+        - name: obten ultima release
+          community.general.github_release:
+            user: k0sproject
+            repo: k0s
+            action: latest_release
+          register: latest_release
+          when: version == 'latest'
+        - debug:
+            var: latest_release
+      when: version == 'latest'
+        
+    - name: usamos num. version 
+      ansible.builtin.set_fact:
+        _release: '{{ version }}'
+      when: version != 'latest'
+    - ansible.builtin.set_fact:
+        _release: '{{ latest_release.tag }}'
+      when: version == 'latest'
+
+    - name: Creamos dir. temporal
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: .k0s
+      register: tempfile_rc
+    - debug:
+        var: tempfile_rc
+
+    - name: Path tempdir
+      ansible.builtin.set_fact:
+        k0s_root: '{{ tempfile_rc.path }}'
+
+    - name: Descargamos release y dscomprimimos
+      ansible.builtin.get_url:
+        url: 'https://github.com/k0sproject/k0s/releases/download/{{ _release }}/k0s-{{ _release }}-amd64'
+        dest: '{{ k0s_root }}/k0s'
+
+    - name: Descargamos kubectl
+      ansible.builtin.get_url:
+        url: 'https://storage.googleapis.com/kubernetes-release/release/v1.20.1/bin/linux/amd64/kubectl'
+        dest: '{{ k0s_root }}/kubectl'
+
+    - name: Guardamos path k0s
+      ansible.builtin.set_fact:
+        k0s_path: '{{ k0s_root }}/k0s'
+        kubectl_path: '{{ k0s_root }}/kubectl'
+
+- name: Instalamos k0s en todos los hosts
+  hosts: all
+  gather_facts: no
+  vars:
+    k0s_path: '{{ hostvars["localhost"].k0s_path }}'
+    kubectl_path: '{{ hostvars["localhost"].kubectl_path }}'
+  tasks:
+    - name: Subimos k0s
+      ansible.builtin.copy:
+        src: '{{ k0s_path }}'
+        dest: /usr/bin/k0s
+        mode: 0755
+
+    - name: Subimos kubectl
+      ansible.builtin.copy:
+        src: '{{ kubectl_path }}'
+        dest: /usr/bin/kubectl
+        mode: 0755
+
+- name: Bootstrap controlador
+  hosts: ubuntu-1
+  gather_facts: yes
+  tasks:
+    - name: Crear archivo de conf.
+      shell:
+        cmd: /usr/bin/k0s default-config > k0s.yaml
+
+    # name: Instalamos controlador
+    # command:
+    #   cmd: /usr/bin/k0s install controller -c k0s.yaml
+    #   creates: /etc/init.d/k0scontroller
+
+    - name: Arrancamos controlador
+      command:
+        cmd: /usr/bin/k0s controller --enable-worker
+
+    - name: Esperamos a que termine de arrancar
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: 6443
+        # path: /var/lib/k0s/pki/admin.conf
+
+    - name: Construimos token para los workers
+      command:
+        cmd: /usr/bin/k0s token create --role=worker
+      register: cmd_token_rc
+
+    - name: Guardamos token
+      ansible.builtin.set_fact:
+        token_workers: '{{ cmd_token_rc.stdout_lines[0] }}'
+
+- name: Añadimos workers
+  hosts: all
+  gather_facts: yes
+  vars:
+    token: '{{ hostvars["ubuntu-1"].token_workers }}'
+  tasks:
+    - name: Es controlador?
+      ansible.builtin.stat:
+        path: /etc/init.d/k0scontroller
+      register: rc_controller
+    - debug:
+        var: rc_controller
+
+    - name: Instalamos token
+      command:
+        cmd: '/usr/bin/k0s install worker {{ token }}'
+        creates: /etc/init.d/k0sworker
+      when: not rc_controller.stat.exists
+
+    - name: Arramcamos worker
+      ansible.builtin.service:
+        name: k0sworker
+        state: started
+      when: not rc_controller.stat.exists
+

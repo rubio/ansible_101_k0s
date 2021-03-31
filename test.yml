@@ -14,3 +14,7 @@
     - name: show cadena
       debug:
         var: cadena
+
+    - name: machine-id
+      debug:
+        msg: '{{ lookup("password", "/dev/null") | hash("md5") }}'
