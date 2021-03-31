@@ -17,3 +17,10 @@ git clone https://github.com/rubio/ansible_101_k0s.git
 
 Con el primero, tendrás el repositorio clonado en tu equipo y con el segundo una vez acabes, no tendrás nada, sólo los contenedores creados, si no los has destruido antes.
 
+
+Instalamos pipen y ansible
+
+pithon -m pip install --user pipenv
+pipenv install
+ansible-galaxy install -r requirements.yaml
+
