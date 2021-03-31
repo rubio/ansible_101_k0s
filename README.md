@@ -9,7 +9,7 @@ docker run -ti \
 
 o 
 
-docker -run -ti \
+docker run -ti \
    --mount type=bind,source=/var/run/docker.sock \
    python:3.8.8 bash
 git clone git@github:rubio/ansible_101_k0s.git
