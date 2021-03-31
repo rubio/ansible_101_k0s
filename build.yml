@@ -3,6 +3,8 @@
   hosts: localhost
   gather_facts: no
   connection: community.docker.docker_api
+  vars:
+    dckr_image: 'ubuntu:20.04'
   vars_prompt:
     - name: work_nodes
       default: 2
@@ -20,7 +22,7 @@
 
     - name: Obtenemos Imagen k0s
       community.docker.docker_image:
-        name: 'ubuntu:20.04'
+        name: '{{ dckr_image }}'
         source: pull
       
     - name: Crea nodo inicial de control
@@ -34,7 +36,7 @@
           - /var/lib/k0s
         ports:
           - "6443:6443"
-        image: 'ubuntu:20.04'
+        image: '{{ dckr_image }}'
         command: 'sleep infinity'
         state: started
 
