@@ -20,7 +20,7 @@ Con el primero, tendrás el repositorio clonado en tu equipo y con el segundo un
 
 Instalamos pipen y ansible
 
-pithon -m pip install --user pipenv
+python -m pip install --user pipenv
 pipenv install
 ansible-galaxy install -r requirements.yaml
 
